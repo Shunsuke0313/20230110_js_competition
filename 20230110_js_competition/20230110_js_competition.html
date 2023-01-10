@@ -1,0 +1,360 @@
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+      <meta charset="UTF-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <link rel="stylesheet" href="./css/style.css">
+      <title>Document</title> 
+
+  </head>
+
+  <body>
+  <h1 class="odekake">お出かけ記録</h1>
+
+<!-- 地図を表示する枠の設定 -->
+  <div class="main_content">
+    <div id="myMap" style='width:70%;height:700px'></div>
+    
+    <div id="visitlog" style='width:30%;height:700px;overflow:scroll;font-size:13px;padding:5px'></div>
+    
+    <div class="popup-overlay">
+      <div class="popup-content">
+        <button class="popup-close">×</button>
+        <h2>チェックインしました！思い出を残しましょう！</h2>
+        <input type="file" id="pics" multiple style="padding:5px">
+        <div id="preview"></div>
+        <div style="padding:10px 40px 10px">
+          <textarea id="text" multiple style="width:500px;height:100px;"></textarea>
+        </div>
+        <input type="submit" value="思い出を記録" id="close" onclick="clickBtn()"></input>
+      </div>
+    </div>
+  </div>
+    <div class="popup-overlay2">
+      <div class="popup-content2">
+        <button class="popup-close2">×</button>
+      </div> 
+    </div>
+
+    <div class="sub_content" style='display:flex; justify-content:center; align-items:center;'>
+      <button id = "check_in">チェックイン</button>
+    </div>
+
+<!-- jQueryの利用宣言-->
+  <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+
+<!-- bingmap APIの利用宣言 -->
+  <script src='https://www.bing.com/api/maps/mapcontrol?callback=GetMap&key=Aq7E739aD5McU1ZeEAmz-Q70DZhds-UvWBx2Ef8F3gQdXV2fT7NCDreHOlDb_r0K' async defer></script>
+
+<!-- javascriptの大枠 -->
+   <script>
+
+    // ポップアップを×ボタンで閉じる
+    $(".popup-close").on("click", function(){
+      $(".popup-overlay").css("display","none");
+    });
+
+    $(".popup-close2").on("click", function(){
+      $(".popup-overlay2").css("display","none");
+    });
+
+  //0. 現在の位置情報を取得する処理 //getCurrentPosition :or: watchPosition
+    function GetMap() {
+      navigator.geolocation.getCurrentPosition(mapsInit, mapsError, set);
+    };
+
+  //1．位置情報の取得に成功した時の処理
+    function mapsInit(position) {
+      //lat=緯度、lon=経度 を取得
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+      const time = position.timestamp;
+      const dateObj = new Date(time);
+      const Y = dateObj.getFullYear();
+      const M = dateObj.getMonth() + 1;
+      const D = dateObj.getDate();
+      const HH = dateObj.getHours();
+      const MM = dateObj.getMinutes();
+      const timeStr = Y+"年"+M+"月"+D+"日　"+HH+"時"+MM+"分";
+      
+      //取得したlat, lon（＝現在地）を中心とする
+      const map = new Microsoft.Maps.Map('#myMap', {
+        center: new Microsoft.Maps.Location(lat, lon), 
+        mapTypeId: Microsoft.Maps.MapTypeId.load, //Type: [load, aerial,canvasDark,canvasLight,birdseye,grayscale,streetside]
+        zoom: 15  //Zoom:1=zoomOut, 20=zoomUp[ 1~20 ]
+      });
+      
+      // 取得した情報（チェックインで立ったピン）がそのまま保存される 
+      let defaultColor = 'blue';
+      let hoverColor = 'red';
+
+      const checkinPlace = new Microsoft.Maps.Location(lat, lon);
+      const pin = new Microsoft.Maps.Pushpin(checkinPlace,{color:defaultColor});
+      pin.metadata = {
+        title: 'みんなのコメントを見よう'
+      };
+      map.entities.push(pin);
+      
+      // Pin周りのイベント
+      Microsoft.Maps.Events.addHandler(pin, 'mouseover', function (e) {
+      e.target.setOptions({color: hoverColor});
+      });
+      Microsoft.Maps.Events.addHandler(pin, 'mouseout', function (e) {
+        e.target.setOptions({color: defaultColor});
+      });
+      Microsoft.Maps.Events.addHandler(pin, 'click',pushpinClicked);
+      
+      // infobox
+      let infobox = new Microsoft.Maps.Infobox(pin, {
+        showPointer: true,     //Pointer
+        showCloseButton: true, //CloseButton
+        //Event:Create
+        actions: [{
+            label: 'ここをクリック',
+            eventHandler: function () { //function
+              $(".popup-overlay2, .popup-content2").addClass("active");
+            }
+        }]
+      });
+
+      function pushpinClicked(e) {
+        if (e.target.metadata) {
+            infobox.setOptions({
+                location: e.target.getLocation(),
+                title: e.target.metadata.title,
+                description: e.target.metadata.description,
+                visible: true
+            });
+      } 
+      infobox.setMap(map);  
+    };
+
+ // チェックインボタンをクリックしたら、詳細を入力するためのポップアップが表示される。
+    $("#check_in").on("click",function(){
+      $(".popup-overlay, .popup-content").addClass("active");
+    }); 
+ // ポップアップを閉じたら、ページが更新される→Local Storageの位置情報が更新され、Realtime Databaseに格納される
+    $("#close").on("click", function(){
+      $(".popup-overlay, .popup-content").removeClass("active");
+      location.reload();
+    });
+  
+    // 緯度経度から住所を取得する（逆ジオコーディング）
+    // let searchManager,loc, i=0;
+    // function GetMap() {
+    //   map = new Microsoft.Maps.Map('#myMap', {
+    //       center: new Microsoft.Maps.Location(lat,lon),
+    //       zoom: 15
+    //   });
+    //   //Make a request to reverse geocode the center of the map.
+    //   loc = map.getCenter();
+    //   reverseGeocode();
+
+    //   //Map Change Event add.
+    //   Microsoft.Maps.Events.addHandler(map, 'click', function (e) {
+    //       loc = e.location;
+    //       reverseGeocode();  //Reverse Geocode
+    //   });
+    // }
+
+    //   function reverseGeocode() {
+    //       //If search manager is not defined, load the search module.
+    //       if (!searchManager) {
+    //           //Create an instance of the search manager and call the reverseGeocode function again.
+    //           Microsoft.Maps.loadModule('Microsoft.Maps.Search', function () {
+    //               searchManager = new Microsoft.Maps.Search.SearchManager(map);
+    //               reverseGeocode();
+    //           });
+    //       } else {
+    //           let searchRequest = {
+    //               location: map.getCenter(),
+    //               callback: function (r) {
+    //                   //Tell the user the name of the result.
+    //                   alert(r.name);
+    //               },
+    //               errorCallback: function (e) {
+    //                   //If there is an error, alert the user about it.
+    //                   alert("Unable to reverse geocode location.");
+    //               }
+    //           };
+    //           //Make the reverse geocode request.
+    //           searchManager.reverseGeocode(searchRequest);
+    //       }
+    //   }; 
+    };
+
+  //2． 位置情報の取得に失敗した場合の処理
+    function mapsError(error) {
+      let e = "";
+      if (error.code == 1) { //1＝位置情報取得が許可されてない（ブラウザの設定）
+        e = "位置情報が許可されてません";
+      }
+      if (error.code == 2) { //2＝現在地を特定できない
+        e = "現在位置を特定できません";
+      }
+      if (error.code == 3) { //3＝位置情報を取得する前にタイムアウトになった場合
+        e = "位置情報を取得する前にタイムアウトになりました";
+      }
+      alert("エラー：" + e);
+    };
+
+  //3.位置情報取得オプション
+    const set ={
+      enableHighAccuracy: true, //より高精度な位置を求める
+      maximumAge: 20000,        //最後の現在地情報取得が20秒以内であればその情報を再利用する設定
+      timeout: 10000            //10秒以内に現在地情報を取得できなければ、処理を終了
+    };
+
+// 一定時間とどまっていれば、後からチェックインが出来る
+
+
+
+
+
+</script>
+
+<!-- Firebaseの利用宣言 （位置情報用）-->
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+  import { getDatabase, ref, push, set, onChildAdded, remove, onChildRemoved }
+        from "https://cdnjs.cloudflare.com/ajax/libs/firebase/9.15.0/firebase-database.js";
+
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyAUjT2YWnWNMqorIjPU8K4wKpBms5Aj5mY",
+    authDomain: "map-api2-c0a07.firebaseapp.com",
+    projectId: "map-api2-c0a07",
+    storageBucket: "map-api2-c0a07.appspot.com",
+    messagingSenderId: "142075713561",
+    appId: "1:142075713561:web:a4e796a08b08895925f288"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app); // RealtimeDBに接続
+  const dbRef = ref(db, "visitlog"); // RealtimeDB内の"visitlog"を使う
+
+  const now = new Date();
+
+  const data = {
+    lat:localStorage.getItem("centerLatitude"),
+    lon:localStorage.getItem("centerLongitude"),
+    time: {
+      year: now.getFullYear(),
+      month: now.getMonth()+1,
+      date: now.getDate(),
+      weekday: now.getDay(),
+      hour: now.getHours(),
+      minute: ('0'+ now.getMinutes()).slice(-2),
+    },
+  };  
+  // console.log(data);
+  const newPostRef = push(dbRef); // pushできる状態にする
+  set(newPostRef, data); // DBに値を送信
+
+  onChildAdded(dbRef, function (data) {
+    const msg = data.val();
+    const key = data.key;
+    let h = "<p>";
+    h += "緯度："+msg.lat;
+    h += ", ";
+    h += "経度："+msg.lon;
+    h += ", ";
+    h += msg.time.year+"年"+msg.time.month+"月"+msg.time.date+"日"+msg.time.hour+"時"+msg.time.minute+"分";
+    h += "</p>";
+    $("#visitlog").prepend(h);
+  });
+
+  // Textareaの情報をrealtime databaseの"memory"に格納
+    $("#close").on("click", function () {
+        const memory = {
+          pics:$("#pics").val(),
+          text:$("#text").val()
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app); // RealtimeDBに接続
+        const dbRef = ref(db, "memory"); // RealtimeDB内の"memory"を使う
+        const newPostRef = push(dbRef); // pushできる状態にする
+        set(newPostRef, memory); // DBに値を送信
+
+        onChildAdded(dbRef, function (memory) {
+          const msg2 = memory.val();
+          const key2 = memory.key;
+          let k = "<p>";
+          k += msg2.pics;
+          k += msg2.text;
+          k += "</p>";
+          $(".popup-overlay2").prepend($("#text").val());
+        });
+    });
+
+
+function previewFile(file) {
+  // プレビュー画像を追加する要素
+  const preview = document.getElementById('preview');
+
+  // FileReaderオブジェクトを作成
+  const reader = new FileReader();
+
+  // ファイルが読み込まれたときに実行する
+  reader.onload = function (e) {
+    const imageUrl = e.target.result; // 画像のURLはevent.target.resultで呼び出せる
+    const img = document.createElement("img"); // img要素を作成
+    img.src = imageUrl; // 画像のURLをimg要素にセット
+    preview.appendChild(img); // #previewの中に追加
+  }
+  // ファイルを読み込む
+  reader.readAsDataURL(file);
+}
+// <input>でファイルが選択されたときの処理
+const fileInput = document.getElementById('pics');
+const handleFileSelect = () => {
+  const files = fileInput.files;
+  for (let i = 0; i < files.length; i++) {
+    previewFile(files[i]);
+  }
+}
+fileInput.addEventListener('change', handleFileSelect);
+
+</script>
+
+<!-- Firebaseの利用宣言 （テキスト用）
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+  import { getDatabase, ref, push, set, onChildAdded, remove, onChildRemoved }
+        from "https://cdnjs.cloudflare.com/ajax/libs/firebase/9.15.0/firebase-database.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  const firebaseConfig2 = {
+    apiKey: "AIzaSyD3r12gIXTUmiyN6t2C4qEgr4VDGRu6FlE",
+    authDomain: "map-api2-text.firebaseapp.com",
+    projectId: "map-api2-text",
+    storageBucket: "map-api2-text.appspot.com",
+    messagingSenderId: "947678513786",
+    appId: "1:947678513786:web:411695497e55c100ed89c3"
+  };
+
+  // Initialize Firebase
+  const app2 = initializeApp(firebaseConfig2);
+  const db2 = getDatabase(app2); // RealtimeDBに接続
+  const dbRef2 = ref(db2, "memories"); // RealtimeDB内の"memories"を使う
+
+  const data2 = {
+    text: $("#text").val(),
+  };  
+  console.log(data2);
+  const newPostRef2 = push(dbRef2); // pushできる状態にする
+  set(newPostRef2, data2); // DBに値を送信
+</script> -->
+
+
+
+</body>
+</html>

@@ -1,0 +1,91 @@
+.odekake{
+  text-align: center;
+  background-color: aquamarine;
+}
+.main_content {
+  display: flex;
+}
+
+#check_in {
+    width:100px;
+    height:40px;
+    border-radius:8px;
+    background-color: black;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color .4s, background-color .4s, transform .7s;
+  }
+#check_in:hover {
+    transform: scale(1.15);
+    background-color: red;
+    color: white;
+  }
+
+.popup-overlay{
+visibility:hidden;
+position:absolute;
+background:white;
+border:3px solid black;
+width:50%;
+height:50%;
+left:25%;
+top:25%;
+}
+.popup-overlay.active{
+visibility:visible;
+text-align:center;
+z-index: 1000;
+}
+
+.popup-content {
+visibility:hidden;
+}
+
+.popup-content.active {
+visibility:visible;
+}
+
+.popup-close{
+display:flex;
+position:absolute;
+right:0;
+font-size:20px;
+}
+    
+
+#preview img {
+    width: 300px;
+    border: solid 1px silver;
+  }
+
+.popup-overlay2{
+visibility:hidden;
+position:absolute;
+background:white;
+border:3px solid black;
+width:50%;
+height:50%;
+left:25%;
+top:25%;
+}
+
+.popup-overlay2.active{
+visibility:visible;
+text-align:center;
+z-index: 1000;
+}
+
+.popup-close2{
+position:absolute;
+right:0;
+font-size:20px;
+}
+
+.popup-content2 {
+visibility:hidden;
+}
+    
+.popup-content2.active {
+visibility:visible;
+}
